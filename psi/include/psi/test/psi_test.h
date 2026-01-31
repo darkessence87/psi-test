@@ -1,12 +1,13 @@
 
 #pragma once
 
+#include <deque>
 #include <format>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace psi::test {
 
@@ -73,15 +74,17 @@ struct FnExpectation : public IFnExpectation {
                 return;
             }
 
-            std::string error = std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
-                                            m_expected_calls,
-                                            fn->m_calls_count);
+            std::string error =
+                std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
+                            m_expected_calls,
+                            fn->m_calls_count);
             std::cout << error << std::endl;
             return;
         }
     }
 
-    void reset() override {
+    void reset() override
+    {
         m_function.reset();
     }
 
@@ -97,7 +100,8 @@ private:
 
 template <typename R, typename... Args>
 struct MockedFn<std::function<R(Args...)>> : TestFn<std::function<R(Args...)>> {
-    int get_calls_count() const {
+    int get_calls_count() const
+    {
         return m_calls_count;
     }
 
@@ -120,14 +124,31 @@ using FnExpectationsList = std::vector<std::unique_ptr<IFnExpectation>>;
 struct TestLib {
     static void init();
     static void destroy();
+    static int run();
     static void verify_expectations();
     static void verify_and_clear_expectations();
     static FnExpectationsList *fn_expectations();
 
+    struct TestCase {
+        std::string m_test_group;
+        std::string m_test_name;
+        std::function<void()> m_fn;
+    };
+    static void add_test(TestCase tc);
+
 private:
-    static FnExpectationsList* m_fn_expectations;
+    static FnExpectationsList *m_fn_expectations;
+    using TestsHolder = std::deque<std::vector<TestCase>>;
+    using TestsIndices = std::map<std::string, TestsHolder::reverse_iterator>;
+    static TestsHolder *m_tests;
+    static TestsIndices *m_tests_indices;
+    static size_t m_total_tests_number;
 
     friend struct TestLib_Tests;
 };
+
+#define TEST(test_group, test_name)                                                                                    \
+    void test_group##_##test_name##_impl();                                                                            \
+    void test_group##_##test_name##_impl()
 
 } // namespace psi::test
