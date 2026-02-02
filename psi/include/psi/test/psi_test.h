@@ -52,6 +52,54 @@ private:
     virtual R f(Args &&...) const = 0;
 };
 
+using FnExpectationsList = std::vector<std::unique_ptr<IFnExpectation>>;
+
+struct TestLib {
+    static void init();
+    static void destroy();
+    static int run();
+    static void verify_expectations();
+    static void verify_and_clear_expectations();
+    static FnExpectationsList *fn_expectations();
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+    struct TestFailure {
+        std::string m_file;
+        int m_line;
+        std::string m_expression;
+        std::string m_actual;
+        std::string m_expected;
+    };
+    struct TestResult {
+        std::string m_test_name;
+        bool m_is_failed = false;
+        std::vector<TestFailure> m_failures;
+    };
+#pragma clang diagnostic pop
+    struct TestCase {
+        std::string m_test_group;
+        std::string m_test_name;
+        std::function<void()> m_fn;
+        TestResult m_test_result = {};
+        void fail_test(const std::string &msg, bool is_assert = false);
+        void fail_test(const std::wstring &msg, bool is_assert = false);
+    };
+    static void add_test(const TestCase &tc);
+    static TestCase *current_running_test();
+
+private:
+    static FnExpectationsList *m_fn_expectations;
+    using TestsHolder = std::deque<std::vector<TestCase>>;
+    using TestsIndices = std::map<std::string, TestsHolder::reverse_iterator>;
+    static TestsHolder *m_tests;
+    static TestsIndices *m_tests_indices;
+    static size_t m_total_tests_number;
+    static TestCase *m_current_running_test;
+
+    friend struct TestLib_Tests;
+};
+
 template <typename R, typename... Args>
 struct FnExpectation : public IFnExpectation {
     using Fn = MockedFn<std::function<R(Args...)>>;
@@ -74,12 +122,13 @@ struct FnExpectation : public IFnExpectation {
                 return;
             }
 
-            std::string error =
-                std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
-                            m_expected_calls,
-                            fn->m_calls_count);
-            std::cout << error << std::endl;
-            return;
+            auto test = TestLib::current_running_test();
+            if (test) {
+                test->fail_test(
+                    std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
+                                m_expected_calls,
+                                fn->m_calls_count));
+            }
         }
     }
 
@@ -117,34 +166,6 @@ private:
 
     friend FnExpectation<R, Args...>;
     friend struct MockedFn_Tests;
-};
-
-using FnExpectationsList = std::vector<std::unique_ptr<IFnExpectation>>;
-
-struct TestLib {
-    static void init();
-    static void destroy();
-    static int run();
-    static void verify_expectations();
-    static void verify_and_clear_expectations();
-    static FnExpectationsList *fn_expectations();
-
-    struct TestCase {
-        std::string m_test_group;
-        std::string m_test_name;
-        std::function<void()> m_fn;
-    };
-    static void add_test(TestCase tc);
-
-private:
-    static FnExpectationsList *m_fn_expectations;
-    using TestsHolder = std::deque<std::vector<TestCase>>;
-    using TestsIndices = std::map<std::string, TestsHolder::reverse_iterator>;
-    static TestsHolder *m_tests;
-    static TestsIndices *m_tests_indices;
-    static size_t m_total_tests_number;
-
-    friend struct TestLib_Tests;
 };
 
 #define TEST(test_group, test_name)                                                                                    \

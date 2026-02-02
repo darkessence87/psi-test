@@ -15,83 +15,53 @@ void EXPECT_LE_test();
 void EXPECT_CALL_test();
 void MOCK_VERIFY_EXPECTATIONS_test();
 
+static void run_test(std::function<void()> test_fn, const std::string &test_name)
+{
+    TestLib::init();
+    TestLib::add_test({"PsiMock_Tests", test_name, test_fn});
+    TestLib::run();
+    TestLib::destroy();
+}
+
 void EXPECT_EQ_test()
 {
-    bool res = EXPECT_EQ(10, 10);
-    if (!res) {
-        terminate_test("EXPECT_EQ_test failed. Values are not equal");
-    }
-
-    res = EXPECT_EQ(10, 11);
-    if (res) {
-        terminate_test("EXPECT_EQ_test failed. Values are not equal");
-    }
-
-    res = EXPECT_EQ(11, 10);
-    if (res) {
-        terminate_test("EXPECT_EQ_test failed. Values are not equal");
-    }
+    auto test_fn = []() {
+        EXPECT_EQ(10, 10);
+        EXPECT_EQ(10, 11);
+        EXPECT_EQ(11, 10);
+    };
+    run_test(test_fn, "EXPECT_EQ_test");
 }
 
 void EXPECT_GE_test()
 {
-    bool res = EXPECT_GE(10, 10);
-    if (res) {
-        terminate_test("EXPECT_GE_test failed. Value 1 is not greater than value 2");
-    }
-
-    res = EXPECT_GE(10, 11);
-    if (res) {
-        terminate_test("EXPECT_GE_test failed. Value 1 is not greater than value 2");
-    }
-
-    res = EXPECT_GE(11, 10);
-    if (!res) {
-        terminate_test("EXPECT_GE_test failed. Value 1 is not greater than value 2");
-    }
+    auto test_fn = []() {
+        EXPECT_GE(10, 10);
+        EXPECT_GE(10, 11);
+        EXPECT_GE(11, 10);
+    };
+    run_test(test_fn, "EXPECT_GE_test");
 }
 
 void EXPECT_LE_test()
 {
-    bool res = EXPECT_LE(10, 10);
-    if (res) {
-        terminate_test("EXPECT_LE_test failed. Value 1 is not less than value 2");
-    }
-
-    res = EXPECT_LE(10, 11);
-    if (!res) {
-        terminate_test("EXPECT_LE_test failed. Value 1 is not less than value 2");
-    }
-
-    res = EXPECT_LE(11, 10);
-    if (res) {
-        terminate_test("EXPECT_LE_test failed. Value 1 is not less than value 2");
-    }
+    auto test_fn = []() {
+        EXPECT_LE(10, 10);
+        EXPECT_LE(10, 11);
+        EXPECT_LE(11, 10);
+    };
+    run_test(test_fn, "EXPECT_LE_test");
 }
 
 void EXPECT_CALL_test()
 {
-    TestLib::init();
-
-    auto test_int_fn = MockedFn<std::function<int(double)>>::create();
-    auto ptr = TestLib::fn_expectations();
-    if (!ptr) {
-        terminate_test("EXPECT_CALL_test failed. TestLib::fn_expectations is null");
-    }
-    if (!ptr->empty()) {
-        terminate_test("EXPECT_CALL_test failed. TestLib::fn_expectations is not empty");
-    }
-    EXPECT_CALL(test_int_fn, 1);
-    if (ptr->empty()) {
-        terminate_test("EXPECT_CALL_test failed. TestLib::fn_expectations is empty");
-    }
-    EXPECT_CALL(test_int_fn, 1);
-    if (ptr->size() != 2) {
-        terminate_test("EXPECT_CALL_test failed. TestLib::fn_expectations is not equal to 2");
-    }
-    
-    test_int_fn->fn()(10.0);
-    TestLib::destroy();
+    auto test_fn = []() {
+        auto test_int_fn = MockedFn<std::function<int(double)>>::create();
+        EXPECT_CALL(test_int_fn, 1);
+        test_int_fn->fn()(10.0);
+        TestLib::verify_expectations();
+    };
+    run_test(test_fn, "EXPECT_CALL_test");
 }
 
 void MOCK_VERIFY_EXPECTATIONS_test() {}

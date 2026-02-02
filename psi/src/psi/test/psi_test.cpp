@@ -34,6 +34,7 @@ FnExpectationsList *TestLib::m_fn_expectations = nullptr;
 TestLib::TestsHolder *TestLib::m_tests = nullptr;
 TestLib::TestsIndices *TestLib::m_tests_indices = nullptr;
 size_t TestLib::m_total_tests_number = 0ull;
+TestLib::TestCase *TestLib::m_current_running_test = nullptr;
 
 void TestLib::init()
 {
@@ -73,6 +74,9 @@ void TestLib::destroy()
         delete m_tests_indices;
         m_tests_indices = nullptr;
     }
+
+    m_current_running_test = nullptr;
+    m_total_tests_number = 0;
 }
 
 int TestLib::run()
@@ -95,21 +99,26 @@ int TestLib::run()
             std::cout << "[----------]";
         }
         std::cout << std::format(" {} tests from {}", test_idx.second->size(), test_idx.first) << std::endl;
-        const auto &test_group = *test_idx.second;
+        auto &test_group = *test_idx.second;
         const auto tg_start = std::chrono::high_resolution_clock::now();
-        for (const auto &test_case : test_group) {
+        for (auto &test_case : test_group) {
             {
                 auto c = GREEN();
                 std::cout << "[ RUN      ]";
             }
             std::cout << std::format(" {}.{}", test_case.m_test_group, test_case.m_test_name) << std::endl;
+            m_current_running_test = &test_case;
+
             const auto tc_start = std::chrono::high_resolution_clock::now();
             test_case.m_fn();
             const auto tc_end = std::chrono::high_resolution_clock::now();
             const auto tc_time = std::chrono::duration_cast<std::chrono::nanoseconds>(tc_end - tc_start).count();
 
-            /// @todo check result of test
-            {
+            const auto is_failed = test_case.m_test_result.m_is_failed;
+            if (is_failed) {
+                auto c = RED();
+                std::cout << "[ FAILED   ]";
+            } else {
                 auto c = GREEN();
                 std::cout << "[       OK ]";
             }
@@ -167,7 +176,7 @@ FnExpectationsList *TestLib::fn_expectations()
     return m_fn_expectations;
 }
 
-void TestLib::add_test(TestCase tc)
+void TestLib::add_test(const TestCase &tc)
 {
     if (!m_tests || !m_tests_indices) {
         return;
@@ -182,6 +191,30 @@ void TestLib::add_test(TestCase tc)
     m_tests->emplace_back(std::vector<TestCase> {tc});
     m_tests_indices->emplace(tc.m_test_group, m_tests->rbegin());
     ++m_total_tests_number;
+}
+
+TestLib::TestCase *TestLib::current_running_test()
+{
+    return m_current_running_test;
+}
+
+void TestLib::TestCase::fail_test(const std::string &msg, bool is_assert)
+{
+    m_test_result.m_is_failed = true;
+    std::cout << msg << std::endl;
+    if (is_assert) {
+        throw std::runtime_error(msg);
+    }
+}
+
+void TestLib::TestCase::fail_test(const std::wstring &msg, bool is_assert)
+{
+    m_test_result.m_is_failed = true;
+    std::wcout << msg << std::endl;
+    if (is_assert) {
+        /// @todo convert wchar_t* to char*
+        throw std::runtime_error("wchar failed");
+    }
 }
 
 } // namespace psi::test
