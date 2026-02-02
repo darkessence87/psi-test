@@ -25,7 +25,7 @@ int main()
         test.verify_expectations_test();
         test.fn_expectations_test();
     }
-    
+
     EXPECT_EQ_test();
     EXPECT_GE_test();
     EXPECT_LE_test();

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 
 namespace psi::test {
@@ -57,7 +58,7 @@ using FnExpectationsList = std::vector<std::unique_ptr<IFnExpectation>>;
 struct TestLib {
     static void init();
     static void destroy();
-    static int run();
+    static int run(const std::string &filter = "");
     static void verify_expectations();
     static void verify_and_clear_expectations();
     static FnExpectationsList *fn_expectations();
@@ -88,13 +89,26 @@ struct TestLib {
     static void add_test(const TestCase &tc);
     static TestCase *current_running_test();
 
+    struct CmdOptions {
+        std::string filter;
+    };
+
+    static CmdOptions parse_args(std::span<char*> argv);
+
+private:
+    struct Tests {
+        using TestsHolder = std::deque<std::vector<TestCase>>;
+        using TestsIndices = std::map<std::string, TestsHolder::reverse_iterator>;
+        TestsHolder m_tests_list;
+        TestsIndices m_tests_indices;
+        size_t m_total_tests_number = 0;
+    };
+
+    static Tests get_filtered_tests(const std::string &filter);
+
 private:
     static FnExpectationsList *m_fn_expectations;
-    using TestsHolder = std::deque<std::vector<TestCase>>;
-    using TestsIndices = std::map<std::string, TestsHolder::reverse_iterator>;
-    static TestsHolder *m_tests;
-    static TestsIndices *m_tests_indices;
-    static size_t m_total_tests_number;
+    static Tests *m_tests;
     static TestCase *m_current_running_test;
 
     friend struct TestLib_Tests;

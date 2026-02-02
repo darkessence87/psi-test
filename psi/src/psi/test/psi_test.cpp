@@ -31,9 +31,7 @@ struct Color {
 }
 
 FnExpectationsList *TestLib::m_fn_expectations = nullptr;
-TestLib::TestsHolder *TestLib::m_tests = nullptr;
-TestLib::TestsIndices *TestLib::m_tests_indices = nullptr;
-size_t TestLib::m_total_tests_number = 0ull;
+TestLib::Tests *TestLib::m_tests = nullptr;
 TestLib::TestCase *TestLib::m_current_running_test = nullptr;
 
 void TestLib::init()
@@ -50,11 +48,7 @@ void TestLib::init()
     }
 
     if (!m_tests) {
-        m_tests = new TestsHolder();
-    }
-
-    if (!m_tests_indices) {
-        m_tests_indices = new TestsIndices();
+        m_tests = new Tests();
     }
 }
 
@@ -70,18 +64,12 @@ void TestLib::destroy()
         m_tests = nullptr;
     }
 
-    if (m_tests_indices) {
-        delete m_tests_indices;
-        m_tests_indices = nullptr;
-    }
-
     m_current_running_test = nullptr;
-    m_total_tests_number = 0;
 }
 
-int TestLib::run()
+int TestLib::run(const std::string &filter)
 {
-    if (!m_tests || !m_tests_indices) {
+    if (!m_tests) {
         return 1;
     }
 
@@ -91,9 +79,11 @@ int TestLib::run()
         auto c = GREEN();
         std::cout << "[==========]";
     }
-    std::cout << std::format(" Running {} tests from {} groups.", m_total_tests_number, m_tests->size()) << std::endl;
+    const auto &tests = get_filtered_tests(filter);
+    std::cout << std::format(" Running {} tests from {} groups.", tests.m_total_tests_number, tests.m_tests_list.size())
+              << std::endl;
     const auto total_start = std::chrono::high_resolution_clock::now();
-    for (const auto &test_idx : *m_tests_indices) {
+    for (const auto &test_idx : tests.m_tests_indices) {
         {
             auto c = GREEN();
             std::cout << "[----------]";
@@ -140,7 +130,10 @@ int TestLib::run()
         auto c = GREEN();
         std::cout << "[==========]";
     }
-    std::cout << std::format(" {} tests from {} groups ran. ({} ms total)", m_total_tests_number, m_tests->size(), total_time)
+    std::cout << std::format(" {} tests from {} groups ran. ({} ms total)",
+                             tests.m_total_tests_number,
+                             tests.m_tests_list.size(),
+                             total_time)
               << std::endl;
 
     return failed;
@@ -178,24 +171,64 @@ FnExpectationsList *TestLib::fn_expectations()
 
 void TestLib::add_test(const TestCase &tc)
 {
-    if (!m_tests || !m_tests_indices) {
+    if (!m_tests) {
         return;
     }
 
-    if (auto it = m_tests_indices->find(tc.m_test_group); it != m_tests_indices->end()) {
+    if (auto it = m_tests->m_tests_indices.find(tc.m_test_group); it != m_tests->m_tests_indices.end()) {
         it->second->emplace_back(tc);
-        ++m_total_tests_number;
+        ++m_tests->m_total_tests_number;
         return;
     }
 
-    m_tests->emplace_back(std::vector<TestCase> {tc});
-    m_tests_indices->emplace(tc.m_test_group, m_tests->rbegin());
-    ++m_total_tests_number;
+    m_tests->m_tests_list.emplace_back(std::vector<TestCase> {tc});
+    m_tests->m_tests_indices.emplace(tc.m_test_group, m_tests->m_tests_list.rbegin());
+    ++m_tests->m_total_tests_number;
 }
 
 TestLib::TestCase *TestLib::current_running_test()
 {
     return m_current_running_test;
+}
+
+TestLib::Tests TestLib::get_filtered_tests(const std::string &filter)
+{
+    if (!m_tests) {
+        return {};
+    }
+
+    if (filter.empty()) {
+        return *m_tests;
+    }
+
+    TestLib::Tests tests;
+
+    for (const auto &tg : m_tests->m_tests_list) {
+        for (const auto &tc : tg) {
+            bool skip_test = true;
+            if (tc.m_test_group.find(filter) != std::string::npos) {
+                skip_test = false;
+            }
+            if (tc.m_test_name.find(filter) != std::string::npos) {
+                skip_test = false;
+            }
+            if (skip_test) {
+                continue;
+            }
+
+            if (auto it = tests.m_tests_indices.find(tc.m_test_group); it != tests.m_tests_indices.end()) {
+                it->second->emplace_back(tc);
+                ++tests.m_total_tests_number;
+                continue;
+            }
+
+            tests.m_tests_list.emplace_back(std::vector<TestCase> {tc});
+            tests.m_tests_indices.emplace(tc.m_test_group, tests.m_tests_list.rbegin());
+            ++tests.m_total_tests_number;
+        }
+    }
+
+    return tests;
 }
 
 void TestLib::TestCase::fail_test(const std::string &msg, bool is_assert)
@@ -215,6 +248,23 @@ void TestLib::TestCase::fail_test(const std::wstring &msg, bool is_assert)
         /// @todo convert wchar_t* to char*
         throw std::runtime_error("wchar failed");
     }
+}
+
+TestLib::CmdOptions TestLib::parse_args(std::span<char*> argv)
+{
+    CmdOptions opts {};
+
+    for (size_t i = 1; i < argv.size(); ++i) {
+        std::string_view arg = argv[i];
+
+        if (arg.starts_with("--filter=")) {
+            opts.filter = std::string(arg.substr(9));
+        } else if (arg == "--filter" && i + 1 < argv.size()) {
+            opts.filter = argv[++i];
+        }
+    }
+
+    return opts;
 }
 
 } // namespace psi::test

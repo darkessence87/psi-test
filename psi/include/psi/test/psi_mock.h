@@ -20,8 +20,14 @@ enum class ComparisonOperation : uint8_t
     Less,
 };
 
+template <typename T>
+concept non_bool_integral = std::integral<T> && !std::same_as<T, bool>;
+
+template <typename T>
+concept bool_integral = std::integral<T> && std::same_as<T, bool>;
+
 template <typename T1, typename T2>
-    requires std::integral<std::remove_cvref_t<T1>> && std::integral<std::remove_cvref_t<T2>>
+    requires non_bool_integral<std::remove_cvref_t<T1>> && non_bool_integral<std::remove_cvref_t<T2>>
 inline void COMPARE(T1 &&arg1, T2 &&arg2, ComparisonOperation op, bool is_assert = false)
 {
     decltype(arg1) a1 = std::forward<T1>(arg1);
@@ -29,9 +35,11 @@ inline void COMPARE(T1 &&arg1, T2 &&arg2, ComparisonOperation op, bool is_assert
     bool res = false;
     std::string error = "";
 
+    using C = std::common_type_t<std::remove_cvref_t<T1>, std::remove_cvref_t<T2>>;
+
     switch (op) {
     case ComparisonOperation::Equal:
-        res = a1 == a2;
+        res = std::cmp_equal(static_cast<C>(a1), static_cast<C>(a2));
         error = std::format("[PSI-TEST] arg1 ({}) MUST be equal to arg2 ({})", a1, a2);
         break;
     case ComparisonOperation::Greater:
@@ -52,17 +60,85 @@ inline void COMPARE(T1 &&arg1, T2 &&arg2, ComparisonOperation op, bool is_assert
 }
 
 template <typename T1, typename T2>
-    requires std::integral<std::remove_cvref_t<T1>> && std::integral<std::remove_cvref_t<T2>>
+    requires non_bool_integral<std::remove_cvref_t<T1>> && non_bool_integral<std::remove_cvref_t<T2>>
 inline void EXPECT_EQ(T1 &&arg1, T2 &&arg2)
 {
     COMPARE(std::forward<T1>(arg1), std::forward<T2>(arg2), ComparisonOperation::Equal);
 }
 
 template <typename T1, typename T2>
-    requires std::integral<std::remove_cvref_t<T1>> && std::integral<std::remove_cvref_t<T2>>
+    requires bool_integral<std::remove_cvref_t<T1>> && bool_integral<std::remove_cvref_t<T2>>
+inline void EXPECT_EQ(T1 &&a1, T2 &&a2)
+{
+    if (a1 != a2) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("{} not equal to {}", a1, a2);
+            test->fail_test(error);
+        }
+    }
+}
+
+template <typename T>
+inline void EXPECT_TRUE(T arg)
+{
+    if (!arg) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("{} not TRUE", arg);
+            test->fail_test(error);
+        }
+    }
+}
+
+template <typename T>
+inline void EXPECT_FALSE(T arg)
+{
+    if (arg) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("{} not FALSE", arg);
+            test->fail_test(error);
+        }
+    }
+}
+
+template <typename T>
+inline void ASSERT_TRUE(T arg)
+{
+    if (!arg) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("{} not TRUE", arg);
+            test->fail_test(error);
+        }
+    }
+}
+
+template <typename T>
+inline void ASSERT_FALSE(T arg)
+{
+    if (arg) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("{} not FALSE", arg);
+            test->fail_test(error, true);
+        }
+    }
+}
+
+template <typename T1, typename T2>
+    requires non_bool_integral<std::remove_cvref_t<T1>> && non_bool_integral<std::remove_cvref_t<T2>>
 inline void ASSERT_EQ(T1 &&arg1, T2 &&arg2)
 {
     COMPARE(std::forward<T1>(arg1), std::forward<T2>(arg2), ComparisonOperation::Equal, true);
+}
+
+template <typename T1, typename T2>
+    requires bool_integral<std::remove_cvref_t<T1>> && bool_integral<std::remove_cvref_t<T2>>
+inline void ASSERT_EQ(T1 &&a1, T2 &&a2)
+{
+    if (a1 != a2) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("{} not equal to {}", a1, a2);
+            test->fail_test(error, true);
+        }
+    }
 }
 
 template <typename T1, typename T2>
@@ -73,8 +149,8 @@ inline void EXPECT_EQ(T1 ptr1, T2 ptr2)
     const auto res = ptr1 == ptr2;
     if (!res) {
         if (auto test = TestLib::current_running_test()) {
-            const void* p1 = ptr1;
-            const void* p2 = ptr2;
+            const void *p1 = ptr1;
+            const void *p2 = ptr2;
             const auto error = std::format("{} not equal to {}", p1, p2);
             test->fail_test(error);
         }
@@ -130,8 +206,8 @@ inline void EXPECT_EQ(const T1 &a, const T2 &b)
     const auto res = std::wstring_view {a} == std::wstring_view {b};
     if (!res) {
         if (auto test = TestLib::current_running_test()) {
-            const auto s1 = std::wstring(std::wstring_view{a});
-            const auto s2 = std::wstring(std::wstring_view{b});
+            const auto s1 = std::wstring(std::wstring_view {a});
+            const auto s2 = std::wstring(std::wstring_view {b});
             test->fail_test(std::format(L"{} not equal to {}", s1, s2));
         }
     }
@@ -158,8 +234,8 @@ inline void EXPECT_NE(T1 ptr1, T2 ptr2)
     const auto res = ptr1 != ptr2;
     if (!res) {
         if (auto test = TestLib::current_running_test()) {
-            const void* p1 = ptr1;
-            const void* p2 = ptr2;
+            const void *p1 = ptr1;
+            const void *p2 = ptr2;
             const auto error = std::format("{} not equal to {}", p1, p2);
             test->fail_test(error, true);
         }
