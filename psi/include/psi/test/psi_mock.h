@@ -242,6 +242,41 @@ inline void EXPECT_NE(T1 ptr1, T2 ptr2)
     }
 }
 
+template <typename T1, typename T2>
+inline void EXPECT_NE(const std::shared_ptr<T1> &ptr1, const std::shared_ptr<T2> &ptr2)
+{
+    const bool res = ptr1 != ptr2;
+
+    if (!res) {
+        if (auto test = TestLib::current_running_test()) {
+            const void *p1 = ptr1.get();
+            const void *p2 = ptr2.get();
+            const auto error = std::format("{} not equal to {}", p1, p2);
+            test->fail_test(error, true);
+        }
+    }
+}
+
+template <typename T>
+inline void EXPECT_NE(const std::shared_ptr<T> &ptr, std::nullptr_t)
+{
+    const bool res = ptr != nullptr;
+
+    if (!res) {
+        if (auto test = TestLib::current_running_test()) {
+            const void *p = ptr.get();
+            const auto error = std::format("{} not equal to nullptr", p);
+            test->fail_test(error, true);
+        }
+    }
+}
+
+template <typename T>
+inline void EXPECT_NE(std::nullptr_t, const std::shared_ptr<T> &ptr)
+{
+    EXPECT_NE(ptr, nullptr);
+}
+
 template <typename T>
     requires std::integral<T>
 inline void EXPECT_GE(T &&arg1, T &&arg2)
@@ -303,12 +338,15 @@ inline void EXPECT_EQ(const std::map<K1, V1> &a, const std::map<K2, V2> &b)
 }
 
 template <typename R, typename... Args>
-inline void EXPECT_CALL(std::shared_ptr<MockedFn<std::function<R(Args...)>>> fn, int expected_calls_number)
+inline FnExpectation<R, Args...> &EXPECT_CALL(std::shared_ptr<MockedFn<std::function<R(Args...)>>> fn,
+                                              int expected_calls_number)
 {
-    auto exp = std::make_unique<FnExpectation<R, Args...>>(expected_calls_number, fn);
+    auto exp = std::make_shared<FnExpectation<R, Args...>>(expected_calls_number, fn);
+    auto exp_ptr = exp.get();
     if (auto ptr = TestLib::fn_expectations()) {
         ptr->emplace_back(std::move(exp));
     }
+    return *exp_ptr;
 }
 
 inline void MOCK_VERIFY_EXPECTATIONS();

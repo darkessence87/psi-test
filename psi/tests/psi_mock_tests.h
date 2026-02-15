@@ -18,7 +18,7 @@ void MOCK_VERIFY_EXPECTATIONS_test();
 static void run_test(std::function<void()> test_fn, const std::string &test_name)
 {
     TestLib::init();
-    TestLib::add_test({"PsiMock_Tests", test_name, test_fn});
+    TestLib::add_test({"PsiMock_Tests", test_name, test_fn, {}});
     TestLib::run();
     TestLib::destroy();
 }
@@ -57,9 +57,8 @@ void EXPECT_CALL_test()
 {
     auto test_fn = []() {
         auto test_int_fn = MockedFn<std::function<int(double)>>::create();
-        EXPECT_CALL(test_int_fn, 1);
+        EXPECT_CALL(test_int_fn, 1).WithArgs(10.0);
         test_int_fn->fn()(10.0);
-        TestLib::verify_expectations();
     };
     run_test(test_fn, "EXPECT_CALL_test");
 }

@@ -53,15 +53,15 @@ private:
     virtual R f(Args &&...) const = 0;
 };
 
-using FnExpectationsList = std::vector<std::unique_ptr<IFnExpectation>>;
+using FnExpectationsList = std::vector<std::shared_ptr<IFnExpectation>>;
 
 struct TestLib {
     static void init();
     static void destroy();
     static int run(const std::string &filter = "");
+    static FnExpectationsList *fn_expectations();
     static void verify_expectations();
     static void verify_and_clear_expectations();
-    static FnExpectationsList *fn_expectations();
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
@@ -82,6 +82,7 @@ struct TestLib {
         std::string m_test_group;
         std::string m_test_name;
         std::function<void()> m_fn;
+        FnExpectationsList m_fn_expectations;
         TestResult m_test_result = {};
         void fail_test(const std::string &msg, bool is_assert = false);
         void fail_test(const std::wstring &msg, bool is_assert = false);
@@ -93,7 +94,7 @@ struct TestLib {
         std::string filter;
     };
 
-    static CmdOptions parse_args(std::span<char*> argv);
+    static CmdOptions parse_args(std::span<char *> argv);
 
 private:
     struct Tests {
@@ -105,9 +106,10 @@ private:
     };
 
     static Tests get_filtered_tests(const std::string &filter);
+    static void verify_expectations(TestCase &tc);
+    static void verify_and_clear_expectations(TestCase &tc);
 
 private:
-    static FnExpectationsList *m_fn_expectations;
     static Tests *m_tests;
     static TestCase *m_current_running_test;
 
@@ -129,25 +131,49 @@ struct FnExpectation : public IFnExpectation {
         verify();
     }
 
+    FnExpectation &WithArgs(Args... args)
+    {
+        m_expected_calls_args.push_back(std::make_tuple(std::decay_t<Args>(args)...));
+        return *this;
+    }
+
     void verify() const override
     {
-        if (auto fn = m_function.lock()) {
-            if (m_expected_calls == fn->m_calls_count) {
-                return;
+        if (!m_function) {
+            return;
+        }
+
+        auto test = TestLib::current_running_test();
+        if (!test) {
+            return;
+        }
+
+        if (!m_expected_calls_args.empty()) {
+            if (m_function->m_calls.size() != m_expected_calls_args.size()) {
+                test->fail_test("[PSI-TEST] Args count mismatch");
             }
 
-            auto test = TestLib::current_running_test();
-            if (test) {
-                test->fail_test(
-                    std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
-                                m_expected_calls,
-                                fn->m_calls_count));
+            for (size_t i = 0; i < m_expected_calls_args.size(); ++i) {
+                if (m_function->m_calls[i] != m_expected_calls_args[i]) {
+                    test->fail_test(std::format("[PSI-TEST] Args mismatch at call {}", i));
+                }
             }
+        }
+
+        if (m_expected_calls != m_function->m_calls_count) {
+            test->fail_test(
+                std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
+                            m_expected_calls,
+                            m_function->m_calls_count));
         }
     }
 
     void reset() override
     {
+        if (m_function) {
+            m_function->m_calls_count = 0;
+            m_function->m_calls.clear();
+        }
         m_function.reset();
     }
 
@@ -155,8 +181,9 @@ private:
     int m_expected_calls = 0;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpadded"
-    std::weak_ptr<Fn> m_function;
+    std::shared_ptr<Fn> m_function;
 #pragma clang diagnostic pop
+    std::vector<std::tuple<std::decay_t<Args>...>> m_expected_calls_args;
 
     friend struct FnExpectation_Tests;
 };
@@ -169,14 +196,19 @@ struct MockedFn<std::function<R(Args...)>> : TestFn<std::function<R(Args...)>> {
     }
 
 private:
-    R f(Args &&...) const override
+    R f(Args &&...args) const override
     {
         ++m_calls_count;
+        m_calls.emplace_back(std::forward<Args>(args)...);
         return R {};
     }
 
 private:
     mutable int m_calls_count = 0;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+    mutable std::vector<std::tuple<std::decay_t<Args>...>> m_calls;
+#pragma clang diagnostic pop
 
     friend FnExpectation<R, Args...>;
     friend struct MockedFn_Tests;

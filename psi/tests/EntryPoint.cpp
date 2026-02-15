@@ -22,7 +22,7 @@ int main()
     {
         TestLib_Tests test;
         test.init_test();
-        test.verify_expectations_test();
+        test.destroy_test();
         test.fn_expectations_test();
     }
 

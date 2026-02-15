@@ -24,8 +24,6 @@ struct FnExpectation_Tests {
 struct TestLib_Tests {
     void init_test();
     void destroy_test();
-    void verify_expectations_test();
-    void verify_and_clear_expectations_test();
     void fn_expectations_test();
 };
 
@@ -75,7 +73,7 @@ void FnExpectation_Tests::ctor_test()
     if (exp.m_expected_calls != 2) {
         terminate_test("FnExpectation_Tests::ctor_test failed. m_expected_calls != 2.");
     }
-    if (exp.m_function.lock() != mock) {
+    if (exp.m_function != mock) {
         terminate_test("FnExpectation_Tests::ctor_test failed. m_function != mock.");
     }
     exp.reset();
@@ -113,100 +111,40 @@ void FnExpectation_Tests::verify_test()
 
 void TestLib_Tests::init_test()
 {
-    if (TestLib::m_fn_expectations != nullptr) {
-        terminate_test("TestLib_Tests::init_test failed. m_fn_expectations != nullptr.");
+    if (TestLib::m_tests != nullptr) {
+        terminate_test("TestLib_Tests::init_test failed. m_tests != nullptr.");
     }
     TestLib::init();
-    if (TestLib::m_fn_expectations == nullptr) {
-        terminate_test("TestLib_Tests::init_test failed. m_fn_expectations = nullptr.");
+    if (TestLib::m_tests == nullptr) {
+        terminate_test("TestLib_Tests::init_test failed. m_tests = nullptr.");
     }
 }
 
 void TestLib_Tests::destroy_test()
 {
     TestLib::destroy();
-    if (TestLib::m_fn_expectations != nullptr) {
-        terminate_test("TestLib_Tests::destroy_test failed. m_fn_expectations != nullptr.");
+    if (TestLib::m_tests != nullptr) {
+        terminate_test("TestLib_Tests::destroy_test failed. m_tests != nullptr.");
+    }
+    if (TestLib::m_current_running_test != nullptr) {
+        terminate_test("TestLib_Tests::destroy_test failed. m_current_running_test != nullptr.");
     }
     TestLib::init();
     TestLib::destroy();
-    if (TestLib::m_fn_expectations != nullptr) {
-        terminate_test("TestLib_Tests::destroy_test failed. m_fn_expectations != nullptr.");
+    if (TestLib::m_tests != nullptr) {
+        terminate_test("TestLib_Tests::destroy_test failed. m_tests != nullptr.");
+    }
+    if (TestLib::m_current_running_test != nullptr) {
+        terminate_test("TestLib_Tests::destroy_test failed. m_current_running_test != nullptr.");
     }
     TestLib::init();
     TestLib::destroy();
-    if (TestLib::m_fn_expectations != nullptr) {
-        terminate_test("TestLib_Tests::destroy_test failed. m_fn_expectations != nullptr.");
+    if (TestLib::m_tests != nullptr) {
+        terminate_test("TestLib_Tests::destroy_test failed. m_tests != nullptr.");
     }
-}
-
-void TestLib_Tests::verify_expectations_test()
-{
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-    struct FakeExpectation : public IFnExpectation {
-        void verify() const override
-        {
-            m_is_verified = true;
-        }
-        void reset() override {}
-        mutable bool m_is_verified = false;
-    };
-#pragma clang diagnostic pop
-
-    TestLib::verify_expectations();
-    TestLib::init();
-    TestLib::verify_expectations();
-
-    auto exp = std::make_unique<FakeExpectation>();
-    auto exp_ptr = exp.get();
-    TestLib::m_fn_expectations->emplace_back(std::move(exp));
-
-    TestLib::verify_expectations();
-    if (exp_ptr->m_is_verified == false) {
-        terminate_test("TestLib_Tests::verify_expectations_test failed. exp.m_is_verified != true.");
+    if (TestLib::m_current_running_test != nullptr) {
+        terminate_test("TestLib_Tests::destroy_test failed. m_current_running_test != nullptr.");
     }
-
-    TestLib::destroy();
-    TestLib::verify_expectations();
-}
-
-void TestLib_Tests::verify_and_clear_expectations_test()
-{
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
-    struct FakeExpectation : public IFnExpectation {
-        void verify() const override
-        {
-            m_is_verified = true;
-        }
-        void reset() override
-        {
-            m_is_reset = true;
-        }
-        mutable bool m_is_verified = false;
-        bool m_is_reset = false;
-    };
-#pragma clang diagnostic pop
-
-    TestLib::verify_and_clear_expectations();
-    TestLib::init();
-    TestLib::verify_and_clear_expectations();
-
-    auto exp = std::make_unique<FakeExpectation>();
-    auto exp_ptr = exp.get();
-    TestLib::m_fn_expectations->emplace_back(std::move(exp));
-
-    TestLib::verify_and_clear_expectations();
-    if (exp_ptr->m_is_verified == false) {
-        terminate_test("TestLib_Tests::verify_and_clear_expectations_test failed. exp.m_is_verified != true.");
-    }
-    if (exp_ptr->m_is_reset == false) {
-        terminate_test("TestLib_Tests::verify_and_clear_expectations_test failed. exp.m_is_reset != true.");
-    }
-
-    TestLib::destroy();
-    TestLib::verify_and_clear_expectations();
 }
 
 void TestLib_Tests::fn_expectations_test()
@@ -229,8 +167,8 @@ void TestLib_Tests::fn_expectations_test()
     }
     TestLib::init();
     exps_ptr = TestLib::fn_expectations();
-    if (exps_ptr == nullptr) {
-        terminate_test("TestLib_Tests::fn_expectations_test failed. exp.m_is_verified = nullptr.");
+    if (exps_ptr != nullptr) {
+        terminate_test("TestLib_Tests::fn_expectations_test failed. exp.m_is_verified != nullptr.");
     }
     TestLib::destroy();
     exps_ptr = TestLib::fn_expectations();

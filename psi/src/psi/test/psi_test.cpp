@@ -30,7 +30,6 @@ struct Color {
     return Color("\033[31m");
 }
 
-FnExpectationsList *TestLib::m_fn_expectations = nullptr;
 TestLib::Tests *TestLib::m_tests = nullptr;
 TestLib::TestCase *TestLib::m_current_running_test = nullptr;
 
@@ -43,10 +42,6 @@ void TestLib::init()
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
 #endif
 
-    if (!m_fn_expectations) {
-        m_fn_expectations = new FnExpectationsList();
-    }
-
     if (!m_tests) {
         m_tests = new Tests();
     }
@@ -54,11 +49,6 @@ void TestLib::init()
 
 void TestLib::destroy()
 {
-    if (m_fn_expectations) {
-        delete m_fn_expectations;
-        m_fn_expectations = nullptr;
-    }
-
     if (m_tests) {
         delete m_tests;
         m_tests = nullptr;
@@ -103,6 +93,7 @@ int TestLib::run(const std::string &filter)
             test_case.m_fn();
             const auto tc_end = std::chrono::high_resolution_clock::now();
             const auto tc_time = std::chrono::duration_cast<std::chrono::nanoseconds>(tc_end - tc_start).count();
+            verify_and_clear_expectations(test_case);
 
             const auto is_failed = test_case.m_test_result.m_is_failed;
             if (is_failed) {
@@ -141,32 +132,47 @@ int TestLib::run(const std::string &filter)
 
 void TestLib::verify_expectations()
 {
-    if (!m_fn_expectations) {
-        return;
-    }
-
-    for (const auto &exp : *m_fn_expectations) {
-        exp->verify();
+    if (auto test = current_running_test()) {
+        for (const auto &exp : test->m_fn_expectations) {
+            exp->verify();
+        }
     }
 }
 
 void TestLib::verify_and_clear_expectations()
 {
-    if (!m_fn_expectations) {
-        return;
+    if (auto test = current_running_test()) {
+        for (const auto &exp : test->m_fn_expectations) {
+            exp->verify();
+            exp->reset();
+        }
+        test->m_fn_expectations.clear();
     }
+}
 
-    for (const auto &exp : *m_fn_expectations) {
+void TestLib::verify_expectations(TestCase &tc)
+{
+    for (const auto &exp : tc.m_fn_expectations) {
+        exp->verify();
+    }
+}
+
+void TestLib::verify_and_clear_expectations(TestCase &tc)
+{
+    for (const auto &exp : tc.m_fn_expectations) {
         exp->verify();
         exp->reset();
     }
 
-    m_fn_expectations->clear();
+    tc.m_fn_expectations.clear();
 }
 
 FnExpectationsList *TestLib::fn_expectations()
 {
-    return m_fn_expectations;
+    if (!m_current_running_test) {
+        return nullptr;
+    }
+    return &m_current_running_test->m_fn_expectations;
 }
 
 void TestLib::add_test(const TestCase &tc)
