@@ -12,8 +12,6 @@
 
 namespace psi::test {
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
 struct IFnExpectation {
     IFnExpectation() = default;
     virtual ~IFnExpectation() = default;
@@ -28,7 +26,6 @@ struct MockedFn;
 
 template <typename C>
 struct TestFn;
-#pragma clang diagnostic pop
 
 template <typename R, typename... Args>
 struct TestFn<std::function<R(Args...)>> {
@@ -63,8 +60,6 @@ struct TestLib {
     static void verify_expectations();
     static void verify_and_clear_expectations();
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
     struct TestFailure {
         std::string m_file;
         int m_line;
@@ -77,7 +72,6 @@ struct TestLib {
         bool m_is_failed = false;
         std::vector<TestFailure> m_failures;
     };
-#pragma clang diagnostic pop
     struct TestCase {
         std::string m_test_group;
         std::string m_test_name;
@@ -179,10 +173,7 @@ struct FnExpectation : public IFnExpectation {
 
 private:
     int m_expected_calls = 0;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
     std::shared_ptr<Fn> m_function;
-#pragma clang diagnostic pop
     std::vector<std::tuple<std::decay_t<Args>...>> m_expected_calls_args;
 
     friend struct FnExpectation_Tests;
@@ -205,10 +196,7 @@ private:
 
 private:
     mutable int m_calls_count = 0;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
     mutable std::vector<std::tuple<std::decay_t<Args>...>> m_calls;
-#pragma clang diagnostic pop
 
     friend FnExpectation<R, Args...>;
     friend struct MockedFn_Tests;

@@ -149,8 +149,6 @@ void TestLib_Tests::destroy_test()
 
 void TestLib_Tests::fn_expectations_test()
 {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpadded"
     struct FakeExpectation : public IFnExpectation {
         void verify() const override
         {
@@ -159,7 +157,6 @@ void TestLib_Tests::fn_expectations_test()
         void reset() override {}
         mutable bool m_is_verified = false;
     };
-#pragma clang diagnostic pop
 
     auto exps_ptr = TestLib::fn_expectations();
     if (exps_ptr != nullptr) {
