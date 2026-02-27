@@ -30,25 +30,21 @@ template <typename T1, typename T2>
     requires non_bool_integral<std::remove_cvref_t<T1>> && non_bool_integral<std::remove_cvref_t<T2>>
 inline void COMPARE(T1 &&arg1, T2 &&arg2, ComparisonOperation op, bool is_assert = false)
 {
-    decltype(arg1) a1 = std::forward<T1>(arg1);
-    decltype(arg2) a2 = std::forward<T2>(arg2);
     bool res = false;
     std::string error = "";
 
-    using C = std::common_type_t<std::remove_cvref_t<T1>, std::remove_cvref_t<T2>>;
-
     switch (op) {
     case ComparisonOperation::Equal:
-        res = std::cmp_equal(static_cast<C>(a1), static_cast<C>(a2));
-        error = std::format("[PSI-TEST] arg1 ({}) MUST be equal to arg2 ({})", a1, a2);
+        res = std::cmp_equal(arg1, arg2);
+        error = std::format("[PSI-TEST] arg1 ({}) MUST be equal to arg2 ({})", arg1, arg2);
         break;
     case ComparisonOperation::Greater:
-        res = a1 > a2;
-        error = std::format("[PSI-TEST] arg1 ({}) MUST be greater than arg2 ({})", a1, a2);
+        res = std::cmp_greater(arg1, arg2);
+        error = std::format("[PSI-TEST] arg1 ({}) MUST be greater than arg2 ({})", arg1, arg2);
         break;
     case ComparisonOperation::Less:
-        res = a1 < a2;
-        error = std::format("[PSI-TEST] arg1 ({}) MUST be less than arg2 ({})", a1, a2);
+        res = std::cmp_less(arg1, arg2);
+        error = std::format("[PSI-TEST] arg1 ({}) MUST be less than arg2 ({})", arg1, arg2);
         break;
     }
 
@@ -291,11 +287,11 @@ inline void ASSERT_GE(T &&arg1, T &&arg2)
     COMPARE(std::forward<T>(arg1), std::forward<T>(arg2), ComparisonOperation::Greater, true);
 }
 
-template <typename T>
-    requires std::integral<T>
-inline void EXPECT_LE(T &&arg1, T &&arg2)
+template <typename T1, typename T2>
+    requires std::integral<std::remove_cvref_t<T1>> && std::integral<std::remove_cvref_t<T2>>
+inline void EXPECT_LE(T1 &&arg1, T2 &&arg2)
 {
-    COMPARE(std::forward<T>(arg1), std::forward<T>(arg2), ComparisonOperation::Less);
+    COMPARE(std::forward<T1>(arg1), std::forward<T2>(arg2), ComparisonOperation::Less);
 }
 
 template <typename T1, typename T2>

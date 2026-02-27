@@ -20,6 +20,19 @@ public:
         const double totalTime = static_cast<double>((end - start).count()) / 1000.0 / N;
         std::cout << "[" << name << "] average fn() us: " << std::fixed << std::setprecision(3) << totalTime << std::endl;
     }
+
+    static void timeFn_nano(const auto &name, auto &&fn, int N)
+    {
+        using namespace std::chrono;
+
+        const auto &start = high_resolution_clock::now();
+        for (int i = 0; i < N; ++i) {
+            fn();
+        }
+        const auto &end = high_resolution_clock::now();
+        const double totalTime = static_cast<double>((end - start).count()) / N;
+        std::cout << "[" << name << "] average fn() ns: " << std::fixed << std::setprecision(3) << totalTime << std::endl;
+    }
 };
 
 } // namespace psi::test
