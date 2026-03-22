@@ -104,7 +104,7 @@ private:
     static void verify_and_clear_expectations(TestCase &tc);
 
 private:
-    static Tests *m_tests;
+    static Tests &tests();
     static TestCase *m_current_running_test;
 
     friend struct TestLib_Tests;
@@ -145,11 +145,11 @@ struct FnExpectation : public IFnExpectation {
         if (!m_expected_calls_args.empty()) {
             if (m_function->m_calls.size() != m_expected_calls_args.size()) {
                 test->fail_test("[PSI-TEST] Args count mismatch");
-            }
-
-            for (size_t i = 0; i < m_expected_calls_args.size(); ++i) {
-                if (m_function->m_calls[i] != m_expected_calls_args[i]) {
-                    test->fail_test(std::format("[PSI-TEST] Args mismatch at call {}", i));
+            } else {
+                for (size_t i = 0; i < m_expected_calls_args.size(); ++i) {
+                    if (m_function->m_calls[i] != m_expected_calls_args[i]) {
+                        test->fail_test(std::format("[PSI-TEST] Args mismatch at call {}", i));
+                    }
                 }
             }
         }
@@ -203,7 +203,16 @@ private:
 };
 
 #define TEST(test_group, test_name)                                                                                    \
-    void test_group##_##test_name##_impl();                                                                            \
-    void test_group##_##test_name##_impl()
+    static void test_group##_##test_name##_impl();                                                                     \
+    namespace {                                                                                                        \
+    struct test_group##_##test_name##_registrar {                                                                      \
+        test_group##_##test_name##_registrar()                                                                         \
+        {                                                                                                              \
+            psi::test::TestLib::add_test({#test_group, #test_name, &test_group##_##test_name##_impl, {}});             \
+        }                                                                                                              \
+    };                                                                                                                 \
+    static test_group##_##test_name##_registrar test_group##_##test_name##_registrar_instance;                         \
+    }                                                                                                                  \
+    static void test_group##_##test_name##_impl()
 
 } // namespace psi::test

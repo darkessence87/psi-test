@@ -22,7 +22,6 @@ struct FnExpectation_Tests {
 };
 
 struct TestLib_Tests {
-    void init_test();
     void destroy_test();
     void fn_expectations_test();
 };
@@ -109,39 +108,19 @@ void FnExpectation_Tests::verify_test()
     exp.reset();
 }
 
-void TestLib_Tests::init_test()
-{
-    if (TestLib::m_tests != nullptr) {
-        terminate_test("TestLib_Tests::init_test failed. m_tests != nullptr.");
-    }
-    TestLib::init();
-    if (TestLib::m_tests == nullptr) {
-        terminate_test("TestLib_Tests::init_test failed. m_tests = nullptr.");
-    }
-}
-
 void TestLib_Tests::destroy_test()
 {
     TestLib::destroy();
-    if (TestLib::m_tests != nullptr) {
-        terminate_test("TestLib_Tests::destroy_test failed. m_tests != nullptr.");
-    }
     if (TestLib::m_current_running_test != nullptr) {
         terminate_test("TestLib_Tests::destroy_test failed. m_current_running_test != nullptr.");
     }
     TestLib::init();
     TestLib::destroy();
-    if (TestLib::m_tests != nullptr) {
-        terminate_test("TestLib_Tests::destroy_test failed. m_tests != nullptr.");
-    }
     if (TestLib::m_current_running_test != nullptr) {
         terminate_test("TestLib_Tests::destroy_test failed. m_current_running_test != nullptr.");
     }
     TestLib::init();
     TestLib::destroy();
-    if (TestLib::m_tests != nullptr) {
-        terminate_test("TestLib_Tests::destroy_test failed. m_tests != nullptr.");
-    }
     if (TestLib::m_current_running_test != nullptr) {
         terminate_test("TestLib_Tests::destroy_test failed. m_current_running_test != nullptr.");
     }

@@ -30,8 +30,13 @@ struct Color {
     return Color("\033[31m");
 }
 
-TestLib::Tests *TestLib::m_tests = nullptr;
 TestLib::TestCase *TestLib::m_current_running_test = nullptr;
+
+TestLib::Tests &TestLib::tests()
+{
+    static Tests* instance = new Tests();
+    return *instance;
+}
 
 void TestLib::init()
 {
@@ -41,28 +46,15 @@ void TestLib::init()
     _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
 #endif
-
-    if (!m_tests) {
-        m_tests = new Tests();
-    }
 }
 
 void TestLib::destroy()
 {
-    if (m_tests) {
-        delete m_tests;
-        m_tests = nullptr;
-    }
-
     m_current_running_test = nullptr;
 }
 
 int TestLib::run(const std::string &filter)
 {
-    if (!m_tests) {
-        return 1;
-    }
-
     int failed = 0;
 
     {
@@ -177,19 +169,17 @@ FnExpectationsList *TestLib::fn_expectations()
 
 void TestLib::add_test(const TestCase &tc)
 {
-    if (!m_tests) {
-        return;
-    }
+    auto &tests_ref = tests();
 
-    if (auto it = m_tests->m_tests_indices.find(tc.m_test_group); it != m_tests->m_tests_indices.end()) {
+    if (auto it = tests_ref.m_tests_indices.find(tc.m_test_group); it != tests_ref.m_tests_indices.end()) {
         it->second->emplace_back(tc);
-        ++m_tests->m_total_tests_number;
+        ++tests_ref.m_total_tests_number;
         return;
     }
 
-    m_tests->m_tests_list.emplace_back(std::vector<TestCase> {tc});
-    m_tests->m_tests_indices.emplace(tc.m_test_group, m_tests->m_tests_list.rbegin());
-    ++m_tests->m_total_tests_number;
+    tests_ref.m_tests_list.emplace_back(std::vector<TestCase> {tc});
+    tests_ref.m_tests_indices.emplace(tc.m_test_group, tests_ref.m_tests_list.rbegin());
+    ++tests_ref.m_total_tests_number;
 }
 
 TestLib::TestCase *TestLib::current_running_test()
@@ -199,17 +189,15 @@ TestLib::TestCase *TestLib::current_running_test()
 
 TestLib::Tests TestLib::get_filtered_tests(const std::string &filter)
 {
-    if (!m_tests) {
-        return {};
-    }
+    auto &tests_ref = tests();
 
     if (filter.empty()) {
-        return *m_tests;
+        return tests_ref;
     }
 
     TestLib::Tests tests;
 
-    for (const auto &tg : m_tests->m_tests_list) {
+    for (const auto &tg : tests_ref.m_tests_list) {
         for (const auto &tc : tg) {
             bool skip_test = true;
             if (tc.m_test_group.find(filter) != std::string::npos) {
@@ -256,7 +244,7 @@ void TestLib::TestCase::fail_test(const std::wstring &msg, bool is_assert)
     }
 }
 
-TestLib::CmdOptions TestLib::parse_args(std::span<char*> argv)
+TestLib::CmdOptions TestLib::parse_args(std::span<char *> argv)
 {
     CmdOptions opts {};
 
