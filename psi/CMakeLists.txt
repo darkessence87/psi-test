@@ -1,8 +1,3 @@
-include_directories(
-    include
-    src
-)
-
 set (SOURCES
     src/psi/test/psi_mock.cpp
     src/psi/test/psi_test.cpp
@@ -11,7 +6,16 @@ set (SOURCES
 set (target_lib "psi-test")
 
 add_library(${target_lib} ${SOURCES})
-target_link_libraries(${target_lib} "clang_rt.asan_dynamic-x86_64;clang_rt.asan_dynamic_runtime_thunk-x86_64")
+add_library(psi::test ALIAS ${target_lib})
+
+target_include_directories(${target_lib}
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 psi_config_target(${target_lib})
 
 psi_make_examples("1_TestExamples" "examples/1_TestExamples.cpp" "${target_lib}")
