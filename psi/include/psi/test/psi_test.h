@@ -7,8 +7,11 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
+#include <tuple>
+#include <utility>
 
 namespace psi::test {
 
@@ -86,8 +89,11 @@ struct TestLib {
 
     struct CmdOptions {
         std::string filter;
+        bool list_tests = false;
+        bool color = true;
     };
 
+    static int run(const CmdOptions &opts);
     static CmdOptions parse_args(std::span<char *> argv);
 
 private:
@@ -131,6 +137,12 @@ struct FnExpectation : public IFnExpectation {
         return *this;
     }
 
+    FnExpectation &WithArgContains(size_t arg_index, std::string_view substring)
+    {
+        m_arg_contains_checks.emplace_back(arg_index, std::string(substring));
+        return *this;
+    }
+
     void verify() const override
     {
         if (!m_function) {
@@ -154,6 +166,21 @@ struct FnExpectation : public IFnExpectation {
             }
         }
 
+        if (!m_arg_contains_checks.empty()) {
+            for (size_t call_i = 0; call_i < m_function->m_calls.size(); ++call_i) {
+                for (const auto &[arg_index, substring] : m_arg_contains_checks) {
+                    const auto str = get_string_arg(m_function->m_calls[call_i], arg_index);
+                    if (!str.has_value()) {
+                        test->fail_test(std::format("[PSI-TEST] WithArgContains: arg {} is not a string", arg_index));
+                    } else if (str->find(substring) == std::string::npos) {
+                        test->fail_test(std::format("[PSI-TEST] WithArgContains: \"{}\" does not contain \"{}\"",
+                                                    *str,
+                                                    substring));
+                    }
+                }
+            }
+        }
+
         if (m_expected_calls != m_function->m_calls_count) {
             test->fail_test(
                 std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
@@ -172,9 +199,31 @@ struct FnExpectation : public IFnExpectation {
     }
 
 private:
+    template <typename Tuple>
+    static std::optional<std::string> get_string_arg(const Tuple &t, size_t index)
+    {
+        std::optional<std::string> result;
+        size_t i = 0;
+        std::apply(
+            [&](const auto &...args) {
+                auto check = [&](const auto &arg) {
+                    if (i == index) {
+                        if constexpr (std::convertible_to<std::decay_t<decltype(arg)>, std::string_view>) {
+                            result = std::string(std::string_view(arg));
+                        }
+                    }
+                    ++i;
+                };
+                (check(args), ...);
+            },
+            t);
+        return result;
+    }
+
     int m_expected_calls = 0;
     std::shared_ptr<Fn> m_function;
     std::vector<std::tuple<std::decay_t<Args>...>> m_expected_calls_args;
+    std::vector<std::pair<size_t, std::string>> m_arg_contains_checks;
 
     friend struct FnExpectation_Tests;
 };

@@ -169,6 +169,20 @@ inline void EXPECT_EQ(T1 &&s1, T2 &&s2)
 
 template <typename T1, typename T2>
     requires std::convertible_to<T1, std::string_view> && std::convertible_to<T2, std::string_view>
+inline void EXPECT_CONTAINS(T1 &&haystack, T2 &&needle)
+{
+    const std::string_view h {haystack};
+    const std::string_view n {needle};
+    if (h.find(n) == std::string_view::npos) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::format("\"{}\" does not contain \"{}\"", h, n);
+            test->fail_test(error);
+        }
+    }
+}
+
+template <typename T1, typename T2>
+    requires std::convertible_to<T1, std::string_view> && std::convertible_to<T2, std::string_view>
 inline void ASSERT_EQ(T1 &&s1, T2 &&s2)
 {
     const auto res = !(std::string_view {s1} == std::string_view {s2});
