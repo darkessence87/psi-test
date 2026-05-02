@@ -91,6 +91,7 @@ struct TestLib {
         std::string filter;
         bool list_tests = false;
         bool color = true;
+        bool also_run_disabled = false;
     };
 
     static int run(const CmdOptions &opts);
@@ -103,9 +104,10 @@ private:
         TestsHolder m_tests_list;
         TestsIndices m_tests_indices;
         size_t m_total_tests_number = 0;
+        size_t m_disabled_count = 0;
     };
 
-    static Tests get_filtered_tests(const std::string &filter);
+    static Tests get_filtered_tests(const std::string &filter, bool also_run_disabled = false);
     static void verify_expectations(TestCase &tc);
     static void verify_and_clear_expectations(TestCase &tc);
 

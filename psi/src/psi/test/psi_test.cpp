@@ -57,81 +57,7 @@ void TestLib::destroy()
 
 int TestLib::run(const std::string &filter)
 {
-    int failed = 0;
-
-    {
-        auto c = GREEN();
-        std::cout << "[==========]";
-    }
-    const auto &tests = get_filtered_tests(filter);
-    std::cout << std::format(" Running {} tests from {} groups.", tests.m_total_tests_number, tests.m_tests_list.size())
-              << std::endl;
-    const auto total_start = std::chrono::high_resolution_clock::now();
-    for (const auto &test_idx : tests.m_tests_indices) {
-        {
-            auto c = GREEN();
-            std::cout << "[----------]";
-        }
-        std::cout << std::format(" {} tests from {}", test_idx.second->size(), test_idx.first) << std::endl;
-        auto &test_group = *test_idx.second;
-        const auto tg_start = std::chrono::high_resolution_clock::now();
-        for (auto &test_case : test_group) {
-            {
-                auto c = GREEN();
-                std::cout << "[ RUN      ]";
-            }
-            std::cout << std::format(" {}.{}", test_case.m_test_group, test_case.m_test_name) << std::endl;
-            m_current_running_test = &test_case;
-
-            const auto tc_start = std::chrono::high_resolution_clock::now();
-            test_case.m_fn();
-            const auto tc_end = std::chrono::high_resolution_clock::now();
-            const auto tc_time = std::chrono::duration_cast<std::chrono::milliseconds>(tc_end - tc_start).count();
-            verify_and_clear_expectations(test_case);
-
-            const auto is_failed = test_case.m_test_result.m_is_failed;
-            if (is_failed) {
-                ++failed;
-                auto c = RED();
-                std::cout << "[  FAILED  ]";
-            } else {
-                auto c = GREEN();
-                std::cout << "[       OK ]";
-            }
-            std::cout << std::format(" {}.{} ({} ms)", test_case.m_test_group, test_case.m_test_name, tc_time) << std::endl;
-        }
-        const auto tg_end = std::chrono::high_resolution_clock::now();
-        const auto tg_time = std::chrono::duration_cast<std::chrono::milliseconds>(tg_end - tg_start).count();
-        {
-            auto c = GREEN();
-            std::cout << "[----------]";
-        }
-        std::cout << std::format(" {} tests from {} ({} ms total)", test_idx.second->size(), test_idx.first, tg_time)
-                  << std::endl
-                  << std::endl;
-    }
-    const auto total_end = std::chrono::high_resolution_clock::now();
-    const auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start).count();
-    {
-        auto c = GREEN();
-        std::cout << "[==========]";
-    }
-    std::cout << std::format(" {} tests from {} test suite ran. ({} ms total)",
-                             tests.m_total_tests_number,
-                             tests.m_tests_list.size(),
-                             total_time)
-              << std::endl;
-    if (failed == 0) {
-        auto c = GREEN();
-        std::cout << std::format("[  PASSED  ] {} test{}.\n", tests.m_total_tests_number,
-                                 tests.m_total_tests_number != 1 ? "s" : "");
-    } else {
-        auto c = RED();
-        std::cout << std::format("[  FAILED  ] {} test{}, listed below:\n", failed,
-                                 failed != 1 ? "s" : "");
-    }
-
-    return failed;
+    return run(CmdOptions{.filter = filter});
 }
 
 void TestLib::verify_expectations()
@@ -213,55 +139,86 @@ static bool matches_pattern(const std::string &group, const std::string &name, c
     return full == pattern;
 }
 
-TestLib::Tests TestLib::get_filtered_tests(const std::string &filter)
+static bool is_disabled_test(const std::string &group, const std::string &name)
+{
+    return name.starts_with("DISABLED_") || group.starts_with("DISABLED_");
+}
+
+// Returns true when a disabled test should be skipped (no explicit filter selects it).
+static bool should_skip_disabled(const std::string &group, const std::string &name, const std::string &filter)
+{
+    if (filter.empty() || filter == "*") {
+        return true; // wildcard — skip disabled
+    }
+    std::string_view sv(filter);
+    while (!sv.empty()) {
+        auto pos = sv.find(':');
+        std::string pat(sv.substr(0, pos));
+        // Exact Group.Name pattern (not a wildcard) — treat as explicit selection
+        const bool is_wildcard = pat.empty() || pat == "*" || pat.ends_with(".*");
+        if (!is_wildcard && matches_pattern(group, name, pat)) {
+            return false; // explicitly selected → don't skip
+        }
+        if (pos == std::string_view::npos) break;
+        sv.remove_prefix(pos + 1);
+    }
+    return true;
+}
+
+TestLib::Tests TestLib::get_filtered_tests(const std::string &filter, bool also_run_disabled)
 {
     auto &tests_ref = tests();
 
-    // "*" or empty → run all
-    if (filter.empty() || filter == "*") {
-        return tests_ref;
-    }
+    TestLib::Tests result;
 
-    // Split colon-separated patterns (GTest format: "A.B:C.D:E.*")
-    std::vector<std::string> patterns;
-    {
-        std::string_view sv(filter);
-        while (!sv.empty()) {
-            auto pos = sv.find(':');
-            patterns.emplace_back(sv.substr(0, pos));
-            if (pos == std::string_view::npos) break;
-            sv.remove_prefix(pos + 1);
+    // Helper: should this test case be included?
+    auto include_test = [&](const TestCase &tc) -> bool {
+        const bool disabled = is_disabled_test(tc.m_test_group, tc.m_test_name);
+        if (disabled) {
+            if (!also_run_disabled && should_skip_disabled(tc.m_test_group, tc.m_test_name, filter)) {
+                ++result.m_disabled_count;
+                return false;
+            }
         }
-    }
-
-    TestLib::Tests tests;
+        // Apply normal filter
+        if (filter.empty() || filter == "*") {
+            return true;
+        }
+        std::vector<std::string> patterns;
+        {
+            std::string_view sv(filter);
+            while (!sv.empty()) {
+                auto pos = sv.find(':');
+                patterns.emplace_back(sv.substr(0, pos));
+                if (pos == std::string_view::npos) break;
+                sv.remove_prefix(pos + 1);
+            }
+        }
+        for (const auto &pat : patterns) {
+            if (matches_pattern(tc.m_test_group, tc.m_test_name, pat)) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     for (const auto &tg : tests_ref.m_tests_list) {
         for (const auto &tc : tg) {
-            bool skip_test = true;
-            for (const auto &pat : patterns) {
-                if (matches_pattern(tc.m_test_group, tc.m_test_name, pat)) {
-                    skip_test = false;
-                    break;
-                }
-            }
-            if (skip_test) {
+            if (!include_test(tc)) {
                 continue;
             }
-
-            if (auto it = tests.m_tests_indices.find(tc.m_test_group); it != tests.m_tests_indices.end()) {
+            if (auto it = result.m_tests_indices.find(tc.m_test_group); it != result.m_tests_indices.end()) {
                 it->second->emplace_back(tc);
-                ++tests.m_total_tests_number;
+                ++result.m_total_tests_number;
                 continue;
             }
-
-            tests.m_tests_list.emplace_back(std::vector<TestCase> {tc});
-            tests.m_tests_indices.emplace(tc.m_test_group, tests.m_tests_list.rbegin());
-            ++tests.m_total_tests_number;
+            result.m_tests_list.emplace_back(std::vector<TestCase> {tc});
+            result.m_tests_indices.emplace(tc.m_test_group, result.m_tests_list.rbegin());
+            ++result.m_total_tests_number;
         }
     }
 
-    return tests;
+    return result;
 }
 
 void TestLib::TestCase::fail_test(const std::string &msg, bool is_assert)
@@ -297,11 +254,15 @@ TestLib::CmdOptions TestLib::parse_args(std::span<char *> argv)
                          "    List the names of all tests instead of running them.\n"
                          "  --gtest_filter=POSITIVE_PATTERNS[-NEGATIVE_PATTERNS]\n"
                          "    Run only tests whose name matches a positive pattern.\n"
+                         "  --gtest_also_run_disabled_tests\n"
+                         "    Run tests prefixed with DISABLED_ that are skipped by default.\n"
                          "  --gtest_color=(yes|no|auto)\n"
                          "    Enable/disable colored output.\n";
             std::exit(0);
         } else if (arg == "--gtest_list_tests") {
             opts.list_tests = true;
+        } else if (arg == "--gtest_also_run_disabled_tests") {
+            opts.also_run_disabled = true;
         } else if (arg.starts_with("--gtest_color=")) {
             opts.color = (arg.substr(14) != "no");
         } else if (arg.starts_with("--gtest_filter=")) {
@@ -334,7 +295,87 @@ int TestLib::run(const CmdOptions &opts)
         }
         return 0;
     }
-    return run(opts.filter);
+
+    int failed = 0;
+
+    {
+        auto c = GREEN();
+        std::cout << "[==========]";
+    }
+    const auto filtered = get_filtered_tests(opts.filter, opts.also_run_disabled);
+    std::cout << std::format(" Running {} tests from {} groups.", filtered.m_total_tests_number, filtered.m_tests_list.size())
+              << std::endl;
+    const auto total_start = std::chrono::high_resolution_clock::now();
+    for (const auto &test_idx : filtered.m_tests_indices) {
+        {
+            auto c = GREEN();
+            std::cout << "[----------]";
+        }
+        std::cout << std::format(" {} tests from {}", test_idx.second->size(), test_idx.first) << std::endl;
+        auto &test_group = *test_idx.second;
+        const auto tg_start = std::chrono::high_resolution_clock::now();
+        for (auto &test_case : test_group) {
+            {
+                auto c = GREEN();
+                std::cout << "[ RUN      ]";
+            }
+            std::cout << std::format(" {}.{}", test_case.m_test_group, test_case.m_test_name) << std::endl;
+            m_current_running_test = &test_case;
+
+            const auto tc_start = std::chrono::high_resolution_clock::now();
+            test_case.m_fn();
+            const auto tc_end = std::chrono::high_resolution_clock::now();
+            const auto tc_time = std::chrono::duration_cast<std::chrono::milliseconds>(tc_end - tc_start).count();
+            verify_and_clear_expectations(test_case);
+
+            const auto is_failed = test_case.m_test_result.m_is_failed;
+            if (is_failed) {
+                ++failed;
+                auto c = RED();
+                std::cout << "[  FAILED  ]";
+            } else {
+                auto c = GREEN();
+                std::cout << "[       OK ]";
+            }
+            std::cout << std::format(" {}.{} ({} ms)", test_case.m_test_group, test_case.m_test_name, tc_time) << std::endl;
+        }
+        const auto tg_end = std::chrono::high_resolution_clock::now();
+        const auto tg_time = std::chrono::duration_cast<std::chrono::milliseconds>(tg_end - tg_start).count();
+        {
+            auto c = GREEN();
+            std::cout << "[----------]";
+        }
+        std::cout << std::format(" {} tests from {} ({} ms total)", test_idx.second->size(), test_idx.first, tg_time)
+                  << std::endl
+                  << std::endl;
+    }
+    const auto total_end = std::chrono::high_resolution_clock::now();
+    const auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start).count();
+    {
+        auto c = GREEN();
+        std::cout << "[==========]";
+    }
+    std::cout << std::format(" {} tests from {} test suite ran. ({} ms total)",
+                             filtered.m_total_tests_number,
+                             filtered.m_tests_list.size(),
+                             total_time)
+              << std::endl;
+    if (failed == 0) {
+        auto c = GREEN();
+        std::cout << std::format("[  PASSED  ] {} test{}.\n", filtered.m_total_tests_number,
+                                 filtered.m_total_tests_number != 1 ? "s" : "");
+    } else {
+        auto c = RED();
+        std::cout << std::format("[  FAILED  ] {} test{}, listed below:\n", failed,
+                                 failed != 1 ? "s" : "");
+    }
+    if (filtered.m_disabled_count > 0) {
+        std::cout << std::format("  YOU HAVE {} DISABLED TEST{}\n",
+                                 filtered.m_disabled_count,
+                                 filtered.m_disabled_count != 1 ? "S" : "");
+    }
+
+    return failed;
 }
 
 } // namespace psi::test
