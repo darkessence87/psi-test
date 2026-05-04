@@ -1,12 +1,6 @@
 
 #include "psi/test/psi_mock.h"
 
-#include <format>
-#include <functional>
-#include <iostream>
-#include <memory>
-#include <string>
-
 namespace psi::test {
 
 void MOCK_VERIFY_EXPECTATIONS()

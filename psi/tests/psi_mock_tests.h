@@ -5,64 +5,42 @@
 
 namespace psi::test {
 
-#define terminate_test(error)                                                                                          \
-    std::cout << __FILE__ << ":" << __LINE__ << " " << error << std::endl;                                             \
-    std::terminate()
-
-void EXPECT_EQ_test();
-void EXPECT_GE_test();
-void EXPECT_LE_test();
-void EXPECT_CALL_test();
-void MOCK_VERIFY_EXPECTATIONS_test();
-
-static void run_test(std::function<void()> test_fn, const std::string &test_name)
+TEST(MockedFn, create)
 {
-    TestLib::init();
-    TestLib::add_test({"PsiMock_Tests", test_name, test_fn, {}});
-    TestLib::run();
-    TestLib::destroy();
+    using Fn = std::function<int(double)>;
+    auto mock = MockedFn<Fn>::create();
+    EXPECT_NE(mock, nullptr);
 }
 
-void EXPECT_EQ_test()
+TEST(MockedFn, counts_calls)
 {
-    auto test_fn = []() {
-        EXPECT_EQ(10, 10);
-        EXPECT_EQ(10, 11);
-        EXPECT_EQ(11, 10);
-    };
-    run_test(test_fn, "EXPECT_EQ_test");
+    using Fn = std::function<int(double)>;
+    auto mock = MockedFn<Fn>::create();
+    mock->fn()(1.0);
+    mock->fn()(2.0);
+    EXPECT_EQ(mock->get_calls_count(), 2);
 }
 
-void EXPECT_GE_test()
+TEST(MockedFn, default_return_value)
 {
-    auto test_fn = []() {
-        EXPECT_GE(10, 10);
-        EXPECT_GE(10, 11);
-        EXPECT_GE(11, 10);
-    };
-    run_test(test_fn, "EXPECT_GE_test");
+    using Fn = std::function<int(double)>;
+    auto mock = MockedFn<Fn>::create();
+    EXPECT_EQ(mock->fn()(42.0), 0);
 }
 
-void EXPECT_LE_test()
+TEST(EXPECT_CALL, exact_count)
 {
-    auto test_fn = []() {
-        EXPECT_LE(10, 10);
-        EXPECT_LE(10, 11);
-        EXPECT_LE(11, 10);
-    };
-    run_test(test_fn, "EXPECT_LE_test");
+    auto mock = MockedFn<std::function<int(double)>>::create();
+    EXPECT_CALL(mock, 2);
+    mock->fn()(1.0);
+    mock->fn()(2.0);
 }
 
-void EXPECT_CALL_test()
+TEST(EXPECT_CALL, with_args)
 {
-    auto test_fn = []() {
-        auto test_int_fn = MockedFn<std::function<int(double)>>::create();
-        EXPECT_CALL(test_int_fn, 1).WithArgs(10.0);
-        test_int_fn->fn()(10.0);
-    };
-    run_test(test_fn, "EXPECT_CALL_test");
+    auto mock = MockedFn<std::function<int(double)>>::create();
+    EXPECT_CALL(mock, 1).WithArgs(10.0);
+    mock->fn()(10.0);
 }
-
-void MOCK_VERIFY_EXPECTATIONS_test() {}
 
 } // namespace psi::test

@@ -6,6 +6,8 @@
 #endif
 
 #include <chrono>
+#include <format>
+#include <iostream>
 
 namespace psi::test {
 
@@ -53,6 +55,17 @@ void TestLib::init()
 void TestLib::destroy()
 {
     m_current_running_test = nullptr;
+    fn_expectations()->clear();
+    auto &t = tests();
+    t.m_tests_list.clear();
+    t.m_tests_indices.clear();
+    t.m_total_tests_number = 0;
+    t.m_disabled_count = 0;
+}
+
+int TestLib::run()
+{
+    return run(CmdOptions{});
 }
 
 int TestLib::run(const std::string &filter)
@@ -100,7 +113,8 @@ void TestLib::verify_and_clear_expectations(TestCase &tc)
 FnExpectationsList *TestLib::fn_expectations()
 {
     if (!m_current_running_test) {
-        return nullptr;
+        static FnExpectationsList *s_list = new FnExpectationsList();
+        return s_list;
     }
     return &m_current_running_test->m_fn_expectations;
 }
@@ -303,7 +317,11 @@ int TestLib::run(const CmdOptions &opts)
         std::cout << "[==========]";
     }
     const auto filtered = get_filtered_tests(opts.filter, opts.also_run_disabled);
-    std::cout << std::format(" Running {} tests from {} groups.", filtered.m_total_tests_number, filtered.m_tests_list.size())
+    std::cout << std::format(" Running {} test{} from {} test suite{}.",
+                             filtered.m_total_tests_number,
+                             filtered.m_total_tests_number != 1 ? "s" : "",
+                             filtered.m_tests_list.size(),
+                             filtered.m_tests_list.size() != 1 ? "s" : "")
               << std::endl;
     const auto total_start = std::chrono::high_resolution_clock::now();
     for (const auto &test_idx : filtered.m_tests_indices) {
@@ -311,7 +329,10 @@ int TestLib::run(const CmdOptions &opts)
             auto c = GREEN();
             std::cout << "[----------]";
         }
-        std::cout << std::format(" {} tests from {}", test_idx.second->size(), test_idx.first) << std::endl;
+        std::cout << std::format(" {} test{} from {}",
+                                 test_idx.second->size(),
+                                 test_idx.second->size() != 1 ? "s" : "",
+                                 test_idx.first) << std::endl;
         auto &test_group = *test_idx.second;
         const auto tg_start = std::chrono::high_resolution_clock::now();
         for (auto &test_case : test_group) {
@@ -327,6 +348,7 @@ int TestLib::run(const CmdOptions &opts)
             const auto tc_end = std::chrono::high_resolution_clock::now();
             const auto tc_time = std::chrono::duration_cast<std::chrono::milliseconds>(tc_end - tc_start).count();
             verify_and_clear_expectations(test_case);
+            m_current_running_test = nullptr;
 
             const auto is_failed = test_case.m_test_result.m_is_failed;
             if (is_failed) {
@@ -345,7 +367,10 @@ int TestLib::run(const CmdOptions &opts)
             auto c = GREEN();
             std::cout << "[----------]";
         }
-        std::cout << std::format(" {} tests from {} ({} ms total)", test_idx.second->size(), test_idx.first, tg_time)
+        std::cout << std::format(" {} test{} from {} ({} ms total)",
+                                 test_idx.second->size(),
+                                 test_idx.second->size() != 1 ? "s" : "",
+                                 test_idx.first, tg_time)
                   << std::endl
                   << std::endl;
     }
@@ -355,9 +380,11 @@ int TestLib::run(const CmdOptions &opts)
         auto c = GREEN();
         std::cout << "[==========]";
     }
-    std::cout << std::format(" {} tests from {} test suite ran. ({} ms total)",
+    std::cout << std::format(" {} test{} from {} test suite{} ran. ({} ms total)",
                              filtered.m_total_tests_number,
+                             filtered.m_total_tests_number != 1 ? "s" : "",
                              filtered.m_tests_list.size(),
+                             filtered.m_tests_list.size() != 1 ? "s" : "",
                              total_time)
               << std::endl;
     if (failed == 0) {
@@ -365,9 +392,20 @@ int TestLib::run(const CmdOptions &opts)
         std::cout << std::format("[  PASSED  ] {} test{}.\n", filtered.m_total_tests_number,
                                  filtered.m_total_tests_number != 1 ? "s" : "");
     } else {
-        auto c = RED();
-        std::cout << std::format("[  FAILED  ] {} test{}, listed below:\n", failed,
-                                 failed != 1 ? "s" : "");
+        {
+            auto c = RED();
+            std::cout << std::format("[  FAILED  ] {} test{}, listed below:\n", failed,
+                                     failed != 1 ? "s" : "");
+        }
+        for (const auto &test_idx : filtered.m_tests_indices) {
+            for (const auto &tc : *test_idx.second) {
+                if (tc.m_test_result.m_is_failed) {
+                    auto c = RED();
+                    std::cout << std::format("[  FAILED  ] {}.{}\n", tc.m_test_group, tc.m_test_name);
+                }
+            }
+        }
+        std::cout << std::format("\n {} FAILED TEST{}\n", failed, failed != 1 ? "S" : "");
     }
     if (filtered.m_disabled_count > 0) {
         std::cout << std::format("  YOU HAVE {} DISABLED TEST{}\n",

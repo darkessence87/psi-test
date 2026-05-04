@@ -2,9 +2,7 @@
 #pragma once
 
 #include <deque>
-#include <format>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <optional>
@@ -58,7 +56,8 @@ using FnExpectationsList = std::vector<std::shared_ptr<IFnExpectation>>;
 struct TestLib {
     static void init();
     static void destroy();
-    static int run(const std::string &filter = "");
+    static int run();
+    static int run(const std::string &filter);
     static FnExpectationsList *fn_expectations();
     static void verify_expectations();
     static void verify_and_clear_expectations();
@@ -114,8 +113,6 @@ private:
 private:
     static Tests &tests();
     static TestCase *m_current_running_test;
-
-    friend struct TestLib_Tests;
 };
 
 template <typename R, typename... Args>
@@ -162,7 +159,7 @@ struct FnExpectation : public IFnExpectation {
             } else {
                 for (size_t i = 0; i < m_expected_calls_args.size(); ++i) {
                     if (m_function->m_calls[i] != m_expected_calls_args[i]) {
-                        test->fail_test(std::format("[PSI-TEST] Args mismatch at call {}", i));
+                        test->fail_test("[PSI-TEST] Args mismatch at call " + std::to_string(i));
                     }
                 }
             }
@@ -173,21 +170,17 @@ struct FnExpectation : public IFnExpectation {
                 for (const auto &[arg_index, substring] : m_arg_contains_checks) {
                     const auto str = get_string_arg(m_function->m_calls[call_i], arg_index);
                     if (!str.has_value()) {
-                        test->fail_test(std::format("[PSI-TEST] WithArgContains: arg {} is not a string", arg_index));
+                        test->fail_test("[PSI-TEST] WithArgContains: arg " + std::to_string(arg_index) + " is not a string");
                     } else if (str->find(substring) == std::string::npos) {
-                        test->fail_test(std::format("[PSI-TEST] WithArgContains: \"{}\" does not contain \"{}\"",
-                                                    *str,
-                                                    substring));
+                        test->fail_test("[PSI-TEST] WithArgContains: \"" + *str + "\" does not contain \"" + substring + "\"");
                     }
                 }
             }
         }
 
         if (m_expected_calls != m_function->m_calls_count) {
-            test->fail_test(
-                std::format("[PSI-TEST] m_expected_calls ({}) MUST be equal to m_function.m_calls_count ({})",
-                            m_expected_calls,
-                            m_function->m_calls_count));
+            test->fail_test("[PSI-TEST] m_expected_calls (" + std::to_string(m_expected_calls) +
+                            ") MUST be equal to m_function.m_calls_count (" + std::to_string(m_function->m_calls_count) + ")");
         }
     }
 
@@ -226,8 +219,6 @@ private:
     std::shared_ptr<Fn> m_function;
     std::vector<std::tuple<std::decay_t<Args>...>> m_expected_calls_args;
     std::vector<std::pair<size_t, std::string>> m_arg_contains_checks;
-
-    friend struct FnExpectation_Tests;
 };
 
 template <typename R, typename... Args>
@@ -250,7 +241,6 @@ private:
     mutable std::vector<std::tuple<std::decay_t<Args>...>> m_calls;
 
     friend FnExpectation<R, Args...>;
-    friend struct MockedFn_Tests;
 };
 
 #define TEST(test_group, test_name)                                                                                    \
