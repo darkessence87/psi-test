@@ -20,9 +20,11 @@ psi_config_target(${target_lib})
 
 psi_make_examples("1_TestExamples" "examples/1_TestExamples.cpp" "${target_lib}")
 
+if(PSI_BUILD_TESTS)
 set (TEST_SOURCES
     tests/psi_tests.cpp
 )
 add_executable(PSI_TEST_psi_test ${PROJECT_SOURCE_DIR}/tests/EntryPoint.cpp ${TEST_SOURCES})
 target_link_libraries(PSI_TEST_psi_test ${target_lib})
 psi_config_target(PSI_TEST_psi_test)
+endif()
