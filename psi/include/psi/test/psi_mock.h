@@ -330,6 +330,18 @@ inline void EXPECT_LE(T1 &&arg1, T2 &&arg2)
 }
 
 template <typename T1, typename T2>
+    requires std::floating_point<std::remove_cvref_t<T1>> && std::floating_point<std::remove_cvref_t<T2>>
+inline void EXPECT_EQ(T1 &&arg1, T2 &&arg2)
+{
+    if (arg1 != arg2) {
+        if (auto test = TestLib::current_running_test()) {
+            const auto error = std::to_string(arg1) + " not equal to " + std::to_string(arg2);
+            test->fail_test(error);
+        }
+    }
+}
+
+template <typename T1, typename T2>
     requires std::equality_comparable_with<T1, T2>
 inline void EXPECT_EQ(const std::vector<T1> &a, const std::vector<T2> &b)
 {
